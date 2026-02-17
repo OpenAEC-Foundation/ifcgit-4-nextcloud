@@ -1,0 +1,30 @@
+{
+    auto_https off
+}
+
+:80 {
+    # Frontend static files
+    handle /app/* {
+        reverse_proxy frontend:3000
+    }
+
+    # API server
+    handle /api/* {
+        reverse_proxy api:8000
+    }
+
+    # WebDAV server (handled by API)
+    handle /dav/* {
+        reverse_proxy api:8000
+    }
+
+    # Git Smart HTTP Protocol (future)
+    handle /git/* {
+        reverse_proxy api:8000
+    }
+
+    # Default: redirect to app
+    handle {
+        redir /app/ permanent
+    }
+}

@@ -1,0 +1,39 @@
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.18
+
+# Database
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+greenlet==3.1.1
+
+# Auth
+pyjwt==2.10.1
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+
+# Redis / Job queue
+redis==5.2.1
+arq==0.26.1
+
+# Git
+pygit2==1.16.0
+
+# IFC processing
+ifcopenshell==0.8.1
+
+# WebDAV
+wsgidav==4.3.3
+cheroot==10.0.1
+
+# Utilities
+pydantic==2.10.3
+pydantic-settings==2.7.0
+python-slugify==8.0.4
+aiofiles==24.1.0
+httpx==0.28.1
+
+# Metrics
+prometheus-client==0.21.1

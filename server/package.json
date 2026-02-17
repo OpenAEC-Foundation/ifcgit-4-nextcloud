@@ -1,0 +1,11 @@
+{
+  "name": "ifcgit-fragment-converter",
+  "version": "1.0.0",
+  "private": true,
+  "description": "IFC to Fragment converter for IfcGit Server",
+  "dependencies": {
+    "@thatopen/fragments": "^2.4.0",
+    "@thatopen/components": "^2.4.0",
+    "web-ifc": "^0.0.68"
+  }
+}
