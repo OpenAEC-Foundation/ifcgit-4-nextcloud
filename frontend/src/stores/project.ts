@@ -7,6 +7,8 @@ interface Project {
   name: string;
   slug: string;
   description: string | null;
+  engine: string;
+  modules: string[] | null;
   owner_id: string;
   created_at: string;
 }
@@ -56,8 +58,8 @@ export const useProjectStore = defineStore("project", () => {
     }
   }
 
-  async function createProject(name: string, description?: string) {
-    const res = await projectsApi.create({ name, description });
+  async function createProject(name: string, description?: string, engine?: string, modules?: string[]) {
+    const res = await projectsApi.create({ name, description, engine, modules });
     await fetchProjects();
     return res.data;
   }

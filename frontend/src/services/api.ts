@@ -81,7 +81,7 @@ export const projectsApi = {
   list() {
     return api.get("/projects");
   },
-  create(data: { name: string; description?: string }) {
+  create(data: { name: string; description?: string; engine?: string; modules?: string[] }) {
     return api.post("/projects", data);
   },
   get(slug: string) {

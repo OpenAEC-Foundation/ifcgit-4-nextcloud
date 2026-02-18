@@ -28,11 +28,15 @@ router = APIRouter()
 class ProjectCreate(BaseModel):
     name: str
     description: str | None = None
+    engine: str = "git"
+    modules: list[str] | None = None
 
 
 class ProjectUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
+    engine: str | None = None
+    modules: list[str] | None = None
 
 
 class ProjectResponse(BaseModel):
@@ -40,6 +44,8 @@ class ProjectResponse(BaseModel):
     name: str
     slug: str
     description: str | None
+    engine: str
+    modules: list[str] | None
     owner_id: uuid.UUID
     created_at: str
 
@@ -97,6 +103,8 @@ async def list_projects(
             name=p.name,
             slug=p.slug,
             description=p.description,
+            engine=p.engine,
+            modules=p.modules,
             owner_id=p.owner_id,
             created_at=p.created_at.isoformat(),
         )
@@ -110,12 +118,17 @@ async def create_new_project(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    project = await create_project(db, req.name, req.description, user.id)
+    project = await create_project(
+        db, req.name, req.description, user.id,
+        engine=req.engine, modules=req.modules,
+    )
     return ProjectResponse(
         id=project.id,
         name=project.name,
         slug=project.slug,
         description=project.description,
+        engine=project.engine,
+        modules=project.modules,
         owner_id=project.owner_id,
         created_at=project.created_at.isoformat(),
     )
@@ -133,6 +146,8 @@ async def get_project(
         name=project.name,
         slug=project.slug,
         description=project.description,
+        engine=project.engine,
+        modules=project.modules,
         owner_id=project.owner_id,
         created_at=project.created_at.isoformat(),
     )
@@ -146,12 +161,17 @@ async def update_existing_project(
     db: AsyncSession = Depends(get_db),
 ):
     project = await require_project_access(slug, user, db, required_role="admin")
-    project = await update_project(db, project, req.name, req.description)
+    project = await update_project(
+        db, project, req.name, req.description,
+        engine=req.engine, modules=req.modules,
+    )
     return ProjectResponse(
         id=project.id,
         name=project.name,
         slug=project.slug,
         description=project.description,
+        engine=project.engine,
+        modules=project.modules,
         owner_id=project.owner_id,
         created_at=project.created_at.isoformat(),
     )

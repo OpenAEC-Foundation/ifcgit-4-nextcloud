@@ -126,9 +126,13 @@
               </div>
             </div>
 
+            <div v-if="createError" class="form-error">{{ createError }}</div>
             <div class="modal-actions">
-              <button type="button" class="btn-sm" @click="showCreate = false">Cancel</button>
-              <button type="submit" class="btn btn-warm">Create Project</button>
+              <button type="button" class="btn-sm" @click="showCreate = false" :disabled="creating">Cancel</button>
+              <button type="submit" class="btn btn-warm" :disabled="creating || !newName.trim()">
+                <span v-if="creating" class="btn-spinner"></span>
+                {{ creating ? 'Creating...' : 'Create Project' }}
+              </button>
             </div>
           </form>
         </div>
@@ -139,14 +143,18 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive } from "vue";
+import { useRouter } from "vue-router";
 import { useProjectStore } from "@/stores/project";
 
+const router = useRouter();
 const store = useProjectStore();
 const showCreate = ref(false);
 const newName = ref("");
 const newDesc = ref("");
 const search = ref("");
 const engine = ref("git");
+const creating = ref(false);
+const createError = ref("");
 
 const availableModules = reactive([
   { id: "vault", name: "Vault", icon: "\u{1F512}", color: "#4A90B8", active: true },
@@ -172,10 +180,35 @@ onMounted(() => {
 });
 
 async function handleCreate() {
-  await store.createProject(newName.value, newDesc.value || undefined);
-  showCreate.value = false;
-  newName.value = "";
-  newDesc.value = "";
+  if (!newName.value.trim()) return;
+  creating.value = true;
+  createError.value = "";
+  try {
+    const activeModules = availableModules
+      .filter((m) => m.active)
+      .map((m) => m.id);
+    const project = await store.createProject(
+      newName.value.trim(),
+      newDesc.value.trim() || undefined,
+      engine.value,
+      activeModules,
+    );
+    showCreate.value = false;
+    newName.value = "";
+    newDesc.value = "";
+    engine.value = "git";
+    availableModules.forEach((m) => {
+      m.active = ["vault", "view", "docs"].includes(m.id);
+    });
+    if (project?.slug) {
+      router.push(`/projects/${project.slug}`);
+    }
+  } catch (err: any) {
+    createError.value =
+      err.response?.data?.detail || err.message || "Failed to create project";
+  } finally {
+    creating.value = false;
+  }
 }
 
 function formatDate(iso: string) {
@@ -550,6 +583,34 @@ function formatDate(iso: string) {
   font-size: 11px;
   color: var(--text-secondary);
   line-height: 1.4;
+}
+
+/* ── Form error ── */
+.form-error {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: rgba(220, 38, 38, 0.1);
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  border-radius: var(--radius-sm);
+  color: #f87171;
+  font-size: 13px;
+}
+
+.btn-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  margin-right: 6px;
+  vertical-align: -2px;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* ── Modal transition ── */

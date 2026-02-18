@@ -11,7 +11,8 @@ from src.projects.models import Project, ProjectMember
 
 
 async def create_project(
-    db: AsyncSession, name: str, description: str | None, owner_id: uuid.UUID
+    db: AsyncSession, name: str, description: str | None, owner_id: uuid.UUID,
+    engine: str = "git", modules: list[str] | None = None,
 ) -> Project:
     slug = slugify(name)
 
@@ -33,6 +34,8 @@ async def create_project(
         slug=slug,
         description=description,
         git_repo_path=git_repo_path,
+        engine=engine,
+        modules=modules,
         owner_id=owner_id,
     )
     db.add(project)
@@ -64,12 +67,17 @@ async def list_projects_for_user(db: AsyncSession, user_id: uuid.UUID) -> list[P
 
 
 async def update_project(
-    db: AsyncSession, project: Project, name: str | None = None, description: str | None = None
+    db: AsyncSession, project: Project, name: str | None = None, description: str | None = None,
+    engine: str | None = None, modules: list[str] | None = None,
 ) -> Project:
     if name is not None:
         project.name = name
     if description is not None:
         project.description = description
+    if engine is not None:
+        project.engine = engine
+    if modules is not None:
+        project.modules = modules
     await db.commit()
     await db.refresh(project)
     return project

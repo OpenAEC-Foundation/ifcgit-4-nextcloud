@@ -16,6 +16,8 @@ class Project(Base):
     slug: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     git_repo_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    engine: Mapped[str] = mapped_column(String(50), default="git", server_default="git")
+    modules: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     owner_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
