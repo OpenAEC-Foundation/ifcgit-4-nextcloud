@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, DateTime, ForeignKey, func
+from sqlalchemy import String, Text, DateTime, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -17,6 +17,16 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(50), default="viewer")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # ERPNext integration
+    erpnext_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    erpnext_api_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    erpnext_api_secret: Mapped[str | None] = mapped_column(Text, nullable=True)  # Fernet encrypted
+
+    # Nextcloud integration
+    nextcloud_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    nextcloud_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    nextcloud_password: Mapped[str | None] = mapped_column(Text, nullable=True)  # Fernet encrypted
 
     tokens: Mapped[list["ApiToken"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 

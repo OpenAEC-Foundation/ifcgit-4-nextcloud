@@ -25,6 +25,18 @@ const router = createRouter({
       component: () => import("@/views/ProjectView.vue"),
       meta: { requiresAuth: true },
     },
+    {
+      path: "/projects/:slug/graph",
+      name: "graph",
+      component: () => import("@/views/GraphView.vue"),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/settings",
+      name: "settings",
+      component: () => import("@/views/SettingsView.vue"),
+      meta: { requiresAuth: true },
+    },
   ],
 });
 

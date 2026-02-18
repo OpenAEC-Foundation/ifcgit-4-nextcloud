@@ -12,7 +12,9 @@ greenlet==3.1.1
 # Auth
 pyjwt==2.10.1
 passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
 python-jose[cryptography]==3.3.0
+cryptography>=42.0.0
 
 # Redis / Job queue
 redis==5.2.1
@@ -29,11 +31,14 @@ wsgidav==4.3.3
 cheroot==10.0.1
 
 # Utilities
-pydantic==2.10.3
+pydantic[email]==2.10.3
 pydantic-settings==2.7.0
 python-slugify==8.0.4
 aiofiles==24.1.0
 httpx==0.28.1
+
+# Graph database
+neo4j==5.27.0
 
 # Metrics
 prometheus-client==0.21.1

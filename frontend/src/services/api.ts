@@ -53,6 +53,29 @@ export const authApi = {
   },
 };
 
+// --- Settings ---
+export const settingsApi = {
+  get() {
+    return api.get("/auth/settings");
+  },
+  update(data: {
+    erpnext_url?: string | null;
+    erpnext_api_key?: string | null;
+    erpnext_api_secret?: string | null;
+    nextcloud_url?: string | null;
+    nextcloud_username?: string | null;
+    nextcloud_password?: string | null;
+  }) {
+    return api.put("/auth/settings", data);
+  },
+  testErpnext() {
+    return api.post("/auth/settings/erpnext/test");
+  },
+  testNextcloud() {
+    return api.post("/auth/settings/nextcloud/test");
+  },
+};
+
 // --- Projects ---
 export const projectsApi = {
   list() {
@@ -102,6 +125,25 @@ export const gitApi = {
   },
   createBranch(slug: string, data: { name: string; source?: string }) {
     return api.post(`/projects/${slug}/git/branches`, data);
+  },
+};
+
+// --- Graph ---
+export const graphApi = {
+  getData(slug: string, params?: { ifc_class?: string; depth?: number; limit?: number }) {
+    return api.get(`/projects/${slug}/graph/data`, { params });
+  },
+  getStats(slug: string) {
+    return api.get(`/projects/${slug}/graph/stats`);
+  },
+  getNode(slug: string, globalId: string, depth = 1) {
+    return api.get(`/projects/${slug}/graph/node/${globalId}`, { params: { depth } });
+  },
+  search(slug: string, q: string, limit = 50) {
+    return api.get(`/projects/${slug}/graph/search`, { params: { q, limit } });
+  },
+  importIfc(slug: string, filePath: string) {
+    return api.post(`/projects/${slug}/graph/import`, null, { params: { file_path: filePath } });
   },
 };
 

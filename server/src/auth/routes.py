@@ -14,6 +14,13 @@ from src.auth.service import (
     create_api_token_for_user,
     delete_api_token,
 )
+from src.auth.erpnext import (
+    encrypt_secret,
+    decrypt_secret,
+    test_erpnext_connection,
+    test_nextcloud_connection,
+)
+from src.config import settings
 from src.db.database import get_db
 
 router = APIRouter()
@@ -134,3 +141,100 @@ async def remove_token(
     deleted = await delete_api_token(db, token_id, user.id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Token not found")
+
+
+# --- Settings Schemas ---
+
+class SettingsResponse(BaseModel):
+    username: str
+    email: str
+    role: str
+    erpnext_url: str | None = None
+    erpnext_api_key: str | None = None
+    erpnext_api_secret_set: bool = False
+    nextcloud_url: str | None = None
+    nextcloud_username: str | None = None
+    nextcloud_password_set: bool = False
+
+
+class SettingsUpdateRequest(BaseModel):
+    erpnext_url: str | None = None
+    erpnext_api_key: str | None = None
+    erpnext_api_secret: str | None = None
+    nextcloud_url: str | None = None
+    nextcloud_username: str | None = None
+    nextcloud_password: str | None = None
+
+
+# --- Settings Endpoints ---
+
+@router.get("/settings", response_model=SettingsResponse)
+async def get_settings(user: User = Depends(get_current_user)):
+    return SettingsResponse(
+        username=user.username,
+        email=user.email,
+        role=user.role,
+        erpnext_url=user.erpnext_url,
+        erpnext_api_key=user.erpnext_api_key,
+        erpnext_api_secret_set=bool(user.erpnext_api_secret),
+        nextcloud_url=user.nextcloud_url,
+        nextcloud_username=user.nextcloud_username,
+        nextcloud_password_set=bool(user.nextcloud_password),
+    )
+
+
+@router.put("/settings", response_model=SettingsResponse)
+async def update_settings(
+    req: SettingsUpdateRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if req.erpnext_url is not None:
+        user.erpnext_url = req.erpnext_url or None
+    if req.erpnext_api_key is not None:
+        user.erpnext_api_key = req.erpnext_api_key or None
+    if req.erpnext_api_secret is not None:
+        user.erpnext_api_secret = encrypt_secret(req.erpnext_api_secret, settings.secret_key) if req.erpnext_api_secret else None
+    if req.nextcloud_url is not None:
+        user.nextcloud_url = req.nextcloud_url or None
+    if req.nextcloud_username is not None:
+        user.nextcloud_username = req.nextcloud_username or None
+    if req.nextcloud_password is not None:
+        user.nextcloud_password = encrypt_secret(req.nextcloud_password, settings.secret_key) if req.nextcloud_password else None
+
+    await db.commit()
+    await db.refresh(user)
+
+    return SettingsResponse(
+        username=user.username,
+        email=user.email,
+        role=user.role,
+        erpnext_url=user.erpnext_url,
+        erpnext_api_key=user.erpnext_api_key,
+        erpnext_api_secret_set=bool(user.erpnext_api_secret),
+        nextcloud_url=user.nextcloud_url,
+        nextcloud_username=user.nextcloud_username,
+        nextcloud_password_set=bool(user.nextcloud_password),
+    )
+
+
+@router.post("/settings/erpnext/test")
+async def test_erpnext(user: User = Depends(get_current_user)):
+    if not user.erpnext_url or not user.erpnext_api_key or not user.erpnext_api_secret:
+        raise HTTPException(status_code=400, detail="ERPNext credentials not configured")
+    api_secret = decrypt_secret(user.erpnext_api_secret, settings.secret_key)
+    if not api_secret:
+        raise HTTPException(status_code=400, detail="Failed to decrypt API secret")
+    result = await test_erpnext_connection(user.erpnext_url, user.erpnext_api_key, api_secret)
+    return result
+
+
+@router.post("/settings/nextcloud/test")
+async def test_nextcloud(user: User = Depends(get_current_user)):
+    if not user.nextcloud_url or not user.nextcloud_username or not user.nextcloud_password:
+        raise HTTPException(status_code=400, detail="Nextcloud credentials not configured")
+    password = decrypt_secret(user.nextcloud_password, settings.secret_key)
+    if not password:
+        raise HTTPException(status_code=400, detail="Failed to decrypt password")
+    result = await test_nextcloud_connection(user.nextcloud_url, user.nextcloud_username, password)
+    return result

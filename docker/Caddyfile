@@ -5,6 +5,7 @@
 :80 {
     # Frontend static files
     handle /app/* {
+        uri strip_prefix /app
         reverse_proxy frontend:3000
     }
 

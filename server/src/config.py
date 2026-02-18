@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     nextcloud_enabled: bool = False
     nextcloud_url: str = "http://nextcloud:8080"
 
+    # Neo4j (optional)
+    neo4j_enabled: bool = False
+    neo4j_uri: str = "bolt://neo4j:7687"
+    neo4j_user: str = "neo4j"
+    neo4j_password: str = "neo4j-ifcgit"
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

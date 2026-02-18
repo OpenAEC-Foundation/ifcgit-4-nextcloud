@@ -5,7 +5,15 @@
       <div class="sidebar-section">
         <div class="section-header">
           <h4>Files</h4>
-          <FileUpload :slug="slug" @uploaded="onFileUploaded" />
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <router-link :to="`/app/projects/${slug}/graph`" class="btn-sm" title="Graph Explorer">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="5" cy="12" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="19" cy="18" r="2"/>
+                <path d="M7 11l10-4M7 13l10 4"/>
+              </svg>
+            </router-link>
+            <FileUpload :slug="slug" @uploaded="onFileUploaded" />
+          </div>
         </div>
         <div class="file-list">
           <div
@@ -57,7 +65,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useProjectStore } from "@/stores/project";
 import { useViewerStore } from "@/stores/viewer";
 import IfcViewer from "@/components/viewer/IfcViewer.vue";
@@ -68,6 +76,7 @@ import FileUpload from "@/components/common/FileUpload.vue";
 import GitHistory from "@/components/git/GitHistory.vue";
 
 const route = useRoute();
+const router = useRouter();
 const store = useProjectStore();
 const viewerStore = useViewerStore();
 
