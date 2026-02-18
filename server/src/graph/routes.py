@@ -1,5 +1,6 @@
 """API routes for IFC graph database operations."""
 import logging
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -9,10 +10,12 @@ from src.config import settings
 from src.graph.service import (
     get_graph_data,
     get_graph_stats,
+    get_import_progress,
+    import_ifc_to_graph,
     query_neighbors,
     search_graph,
-    import_ifc_to_graph,
 )
+from src.workers.queue import enqueue_graph_import
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -83,16 +86,52 @@ async def search_project_graph(
 async def import_to_graph(
     slug: str,
     file_path: str = Query(..., description="Path to IFC file in project repo"),
+    background: bool = Query(True, description="Run as background job (recommended for large files)"),
     user: User = Depends(get_current_user),
 ):
-    """Import an IFC file into the Neo4j graph database."""
+    """
+    Import an IFC file into the Neo4j graph database.
+
+    By default runs as a background ARQ worker job with progress tracking.
+    Set background=false for small files to run synchronously.
+    Returns a job_id that can be polled via GET /{slug}/graph/import/{job_id}.
+    """
     _check_neo4j_enabled()
-    # Construct the actual file path from project slug + file_path
     import os
     ifc_file = os.path.join(settings.repos_dir, slug, file_path)
     if not os.path.exists(ifc_file):
         raise HTTPException(status_code=404, detail=f"IFC file not found: {file_path}")
-    result = await import_ifc_to_graph(slug, ifc_file)
-    if not result.get("success"):
-        raise HTTPException(status_code=500, detail=result.get("error", "Import failed"))
-    return result
+
+    job_id = str(uuid.uuid4())[:12]
+
+    if background:
+        await enqueue_graph_import(slug, ifc_file, job_id)
+        return {
+            "job_id": job_id,
+            "status": "queued",
+            "message": f"Graph import queued. Poll GET /api/projects/{slug}/graph/import/{job_id} for progress.",
+        }
+    else:
+        # Synchronous import for small files
+        result = await import_ifc_to_graph(slug, ifc_file, job_id=job_id)
+        if not result.get("success"):
+            raise HTTPException(status_code=500, detail=result.get("error", "Import failed"))
+        return {**result, "job_id": job_id}
+
+
+@router.get("/{slug}/graph/import/{job_id}")
+async def get_import_status(
+    slug: str,
+    job_id: str,
+    user: User = Depends(get_current_user),
+):
+    """
+    Poll the progress of a graph import job.
+
+    Returns status, phase, progress percentage, node/rel counts, and timing.
+    """
+    _check_neo4j_enabled()
+    progress = await get_import_progress(job_id)
+    if not progress:
+        raise HTTPException(status_code=404, detail="Job not found or expired")
+    return {"job_id": job_id, **progress}

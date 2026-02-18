@@ -60,6 +60,15 @@ async def enqueue_model_validation(
     )
 
 
+async def enqueue_graph_import(
+    project_id: str, ifc_path: str, job_id: str,
+):
+    """Queue an IFC-to-graph import job (background, for large files)."""
+    pool = await get_redis_pool()
+    await pool.enqueue_job("run_graph_import_job", project_id, ifc_path, job_id)
+    logger.info(f"Queued graph import job {job_id} for {ifc_path}")
+
+
 # --- Worker functions ---
 
 async def generate_fragment_job(ctx, project_id: str, file_path: str, commit_hash: str):
@@ -117,9 +126,43 @@ async def run_validation_job(
     # Placeholder for Phase 3
 
 
+async def run_graph_import_job(ctx, project_id: str, ifc_path: str, job_id: str):
+    """Background job: import IFC file into Neo4j graph database.
+
+    Runs in the ARQ worker process. The heavy IFC parsing is further
+    offloaded to a ProcessPoolExecutor so the worker stays responsive.
+    """
+    logger.info(f"Starting graph import job {job_id} for {ifc_path}")
+    from src.graph.service import import_ifc_to_graph, set_import_progress
+
+    try:
+        result = await import_ifc_to_graph(project_id, ifc_path, job_id=job_id)
+        if not result.get("success"):
+            logger.error(f"Graph import failed: {result.get('error')}")
+        else:
+            logger.info(
+                f"Graph import {job_id} done: "
+                f"{result['nodes_created']} nodes, "
+                f"{result['relationships_created']} rels in "
+                f"{result['total_time_s']}s"
+            )
+    except Exception as e:
+        logger.exception(f"Graph import job {job_id} crashed: {e}")
+        await set_import_progress(job_id, {
+            "status": "failed",
+            "error": str(e),
+            "progress": 0,
+        })
+
+
 class WorkerSettings:
     """arq worker settings."""
-    functions = [generate_fragment_job, run_clash_detection_job, run_validation_job]
+    functions = [
+        generate_fragment_job,
+        run_clash_detection_job,
+        run_validation_job,
+        run_graph_import_job,
+    ]
     redis_settings = parse_redis_url(settings.redis_url)
     max_jobs = 4
-    job_timeout = 1800  # 30 minutes
+    job_timeout = 7200  # 2 hours (large IFC imports)

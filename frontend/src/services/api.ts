@@ -142,8 +142,13 @@ export const graphApi = {
   search(slug: string, q: string, limit = 50) {
     return api.get(`/projects/${slug}/graph/search`, { params: { q, limit } });
   },
-  importIfc(slug: string, filePath: string) {
-    return api.post(`/projects/${slug}/graph/import`, null, { params: { file_path: filePath } });
+  importIfc(slug: string, filePath: string, background = true) {
+    return api.post(`/projects/${slug}/graph/import`, null, {
+      params: { file_path: filePath, background },
+    });
+  },
+  getImportStatus(slug: string, jobId: string) {
+    return api.get(`/projects/${slug}/graph/import/${jobId}`);
   },
 };
 

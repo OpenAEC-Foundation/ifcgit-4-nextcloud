@@ -30,6 +30,43 @@
           <option :value="2">Depth 2</option>
           <option :value="3">Depth 3</option>
         </select>
+        <button class="btn" @click="showImportModal = true" :disabled="importing">
+          {{ importing ? 'Importing...' : 'Import IFC' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Import progress banner -->
+    <div v-if="importJob" class="import-progress-bar">
+      <div class="import-progress-info">
+        <span class="import-phase">{{ importJob.phase_label || importJob.status }}</span>
+        <span class="import-pct">{{ importJob.progress || 0 }}%</span>
+      </div>
+      <div class="import-bar-track">
+        <div class="import-bar-fill" :style="{ width: (importJob.progress || 0) + '%' }"></div>
+      </div>
+      <div v-if="importJob.status === 'completed'" class="import-done">
+        {{ importJob.nodes_created }} nodes, {{ importJob.relationships_created }} rels
+        in {{ importJob.total_time_s }}s
+        <button class="btn-sm" @click="onImportDone" style="margin-left: 8px;">Load Graph</button>
+      </div>
+      <div v-if="importJob.status === 'failed'" class="import-error">
+        Failed: {{ importJob.error }}
+      </div>
+    </div>
+
+    <!-- Import modal -->
+    <div v-if="showImportModal" class="modal-overlay" @click.self="showImportModal = false">
+      <div class="modal-box">
+        <h3>Import IFC to Graph</h3>
+        <div class="form-group">
+          <label>IFC file path (relative to project repo)</label>
+          <input v-model="importFilePath" type="text" placeholder="e.g. model.ifc" />
+        </div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button class="btn-sm" @click="showImportModal = false">Cancel</button>
+          <button class="btn" @click="startImport" :disabled="!importFilePath.trim()">Start Import</button>
+        </div>
       </div>
     </div>
 
@@ -158,6 +195,13 @@ const searchQuery = ref("");
 const searchResults = ref<any[]>([]);
 const filterClass = ref("");
 const depth = ref(2);
+
+// Import state
+const showImportModal = ref(false);
+const importFilePath = ref("");
+const importing = ref(false);
+const importJob = ref<any>(null);
+let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 // Canvas refs
 const canvas = ref<HTMLCanvasElement | null>(null);
@@ -550,6 +594,50 @@ function resizeCanvas() {
   canvas.value.height = rect.height;
 }
 
+async function startImport() {
+  if (!importFilePath.value.trim()) return;
+  showImportModal.value = false;
+  importing.value = true;
+  importJob.value = { status: "queued", progress: 0, phase_label: "Queuing..." };
+
+  try {
+    const { data } = await graphApi.importIfc(slug.value, importFilePath.value.trim());
+    if (data.job_id) {
+      pollImportProgress(data.job_id);
+    } else {
+      // Synchronous result
+      importJob.value = { status: "completed", progress: 100, ...data };
+      importing.value = false;
+    }
+  } catch (e: any) {
+    importJob.value = { status: "failed", error: e.response?.data?.detail || "Import failed", progress: 0 };
+    importing.value = false;
+  }
+}
+
+function pollImportProgress(jobId: string) {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    try {
+      const { data } = await graphApi.getImportStatus(slug.value, jobId);
+      importJob.value = data;
+      if (data.status === "completed" || data.status === "failed") {
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = null;
+        importing.value = false;
+      }
+    } catch {
+      // Job not found yet, keep polling
+    }
+  }, 1000);
+}
+
+function onImportDone() {
+  importJob.value = null;
+  loadStats();
+  loadGraph();
+}
+
 onMounted(async () => {
   await nextTick();
   resizeCanvas();
@@ -562,6 +650,7 @@ onMounted(async () => {
 onUnmounted(() => {
   cancelAnimationFrame(animFrame);
   window.removeEventListener("resize", resizeCanvas);
+  if (pollTimer) clearInterval(pollTimer);
 });
 </script>
 
@@ -904,5 +993,83 @@ onUnmounted(() => {
   font-size: 10px;
   color: var(--text-secondary);
   text-align: right;
+}
+
+/* Import progress */
+.import-progress-bar {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 16px;
+  flex-shrink: 0;
+}
+
+.import-progress-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.import-phase {
+  color: var(--text-secondary);
+}
+
+.import-pct {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.import-bar-track {
+  height: 4px;
+  background: var(--bg-surface);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.import-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-warm));
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.import-done {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--success);
+  display: flex;
+  align-items: center;
+}
+
+.import-error {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--danger);
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-box {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  width: 400px;
+  max-width: 90vw;
+}
+
+.modal-box h3 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: 600;
 }
 </style>
