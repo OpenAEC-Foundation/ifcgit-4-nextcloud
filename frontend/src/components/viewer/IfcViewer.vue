@@ -2,7 +2,10 @@
   <div ref="containerRef" class="ifc-viewer">
     <div v-if="loading" class="viewer-loading">
       <div class="spinner"></div>
-      <p>Loading model...</p>
+      <p>{{ loadStatus }}</p>
+    </div>
+    <div v-if="error" class="viewer-error">
+      <p>{{ error }}</p>
     </div>
   </div>
 </template>
@@ -18,9 +21,14 @@ import { fragmentsApi } from "@/services/api";
 const viewerStore = useViewerStore();
 const containerRef = ref<HTMLDivElement | null>(null);
 const loading = ref(false);
+const loadStatus = ref("Loading model...");
+const error = ref("");
 
 let components: OBC.Components | null = null;
 let world: OBC.SimpleWorld<OBC.SimpleScene, OBC.SimpleCamera, OBF.PostproductionRenderer> | null = null;
+let currentModel: THREE.Object3D | null = null;
+let modelCenter = new THREE.Vector3();
+let modelRadius = 50;
 
 onMounted(() => {
   initViewer();
@@ -43,6 +51,9 @@ function initViewer() {
   world.scene = new OBC.SimpleScene(components);
   world.renderer = new OBF.PostproductionRenderer(components, containerRef.value);
   world.camera = new OBC.SimpleCamera(components);
+
+  // Disable postproduction - causes blank screen
+  world.renderer.postproduction.enabled = false;
 
   components.init();
 
@@ -77,26 +88,116 @@ async function handleClick(event: MouseEvent) {
   const result = caster.castRay();
 
   if (result && result.object) {
-    // Try to get expressID from the intersected mesh
     const mesh = result.object as THREE.Mesh;
     const frag = (mesh as any).fragment;
-    if (frag && result.faceIndex !== undefined) {
-      const expressID = frag.getItemID(result.instanceId ?? 0, result.faceIndex);
-      if (expressID !== undefined) {
-        viewerStore.selectElement(expressID);
+    if (frag) {
+      // Get expressID from fragment
+      const itemId = frag.getItemID(result.instanceId ?? 0);
+      if (itemId !== undefined && itemId !== null) {
+        viewerStore.selectElement(itemId);
+        highlightElement(itemId);
+        return;
       }
+    }
+    // Fallback: try getting from face index
+    if (result.faceIndex !== undefined) {
+      viewerStore.selectElement(result.faceIndex);
     }
   } else {
     viewerStore.selectElement(null);
+    clearHighlight();
   }
+}
+
+function fitCameraToModel(obj?: THREE.Object3D) {
+  if (!world) return;
+  const target = obj || currentModel;
+  if (!target) return;
+
+  const box = new THREE.Box3().setFromObject(target);
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const radius = Math.max(size.x, size.y, size.z);
+  const dist = radius * 2;
+
+  modelCenter.copy(center);
+  modelRadius = radius;
+
+  world.camera.controls.setLookAt(
+    center.x + dist, center.y + dist * 0.7, center.z + dist,
+    center.x, center.y, center.z,
+    true,
+  );
+}
+
+function setView(direction: string) {
+  if (!world || !currentModel) return;
+  const dist = modelRadius * 2.5;
+  const c = modelCenter;
+
+  switch (direction) {
+    case "front":
+      world.camera.controls.setLookAt(c.x, c.y, c.z + dist, c.x, c.y, c.z, true);
+      break;
+    case "top":
+      world.camera.controls.setLookAt(c.x, c.y + dist, c.z, c.x, c.y, c.z, true);
+      break;
+    case "right":
+      world.camera.controls.setLookAt(c.x + dist, c.y, c.z, c.x, c.y, c.z, true);
+      break;
+  }
+}
+
+let wireframeActive = false;
+function toggleWireframe() {
+  if (!currentModel) return;
+  wireframeActive = !wireframeActive;
+  currentModel.traverse((child: any) => {
+    if (child.isMesh && child.material) {
+      const mats = Array.isArray(child.material) ? child.material : [child.material];
+      mats.forEach((m: any) => { m.wireframe = wireframeActive; });
+    }
+  });
+}
+
+let highlightedMeshes: { mesh: THREE.Mesh; originalMaterial: THREE.Material | THREE.Material[] }[] = [];
+
+function highlightElement(expressID: number) {
+  clearHighlight();
+  if (!currentModel) return;
+
+  const highlightMat = new THREE.MeshStandardMaterial({
+    color: 0x00aaff,
+    transparent: true,
+    opacity: 0.7,
+    depthTest: true,
+  });
+
+  currentModel.traverse((child: any) => {
+    if (child.isMesh && child.fragment) {
+      const ids = child.fragment.ids;
+      if (ids && ids.has(expressID)) {
+        highlightedMeshes.push({ mesh: child, originalMaterial: child.material });
+        child.material = highlightMat;
+      }
+    }
+  });
+}
+
+function clearHighlight() {
+  for (const { mesh, originalMaterial } of highlightedMeshes) {
+    mesh.material = originalMaterial;
+  }
+  highlightedMeshes = [];
 }
 
 async function loadModel(slug: string, filePath: string) {
   if (!components || !world) return;
   loading.value = true;
+  error.value = "";
 
   try {
-    // Load fragment if available
+    loadStatus.value = "Checking for pre-built fragments...";
     const token = localStorage.getItem("token");
     const fragUrl = fragmentsApi.getFragmentUrl(slug, filePath);
 
@@ -105,26 +206,26 @@ async function loadModel(slug: string, filePath: string) {
     });
 
     if (response.ok) {
-      // Load .frag file
+      loadStatus.value = "Loading fragments...";
       const data = await response.arrayBuffer();
       const buffer = new Uint8Array(data);
 
       const fragmentsManager = components!.get(OBC.FragmentsManager);
       const model = fragmentsManager.load(buffer);
       world!.scene.three.add(model);
-
-      // Fit camera to model
-      world!.camera.controls.fitToSphere(model, true);
+      currentModel = model;
     } else {
-      // Fragment not ready - try loading IFC directly
-      console.warn("Fragment not available, attempting client-side IFC loading");
+      loadStatus.value = "Downloading IFC file...";
       await loadIfcDirectly(slug, filePath);
     }
 
-    // Load properties and spatial tree
+    fitCameraToModel();
+
+    loadStatus.value = "Loading metadata...";
     await loadMetadata(slug, filePath);
-  } catch (err) {
+  } catch (err: any) {
     console.error("Failed to load model:", err);
+    error.value = `Failed to load: ${err.message || err}`;
   } finally {
     loading.value = false;
   }
@@ -134,7 +235,7 @@ async function loadIfcDirectly(slug: string, filePath: string) {
   if (!components) return;
 
   const token = localStorage.getItem("token");
-  const response = await fetch(`/api/projects/${slug}/files/${filePath}`, {
+  const response = await fetch(`/api/projects/${slug}/files/${encodeURIComponent(filePath)}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 
@@ -142,16 +243,20 @@ async function loadIfcDirectly(slug: string, filePath: string) {
     throw new Error("Failed to download IFC file");
   }
 
+  loadStatus.value = "Parsing IFC model...";
   const data = await response.arrayBuffer();
   const buffer = new Uint8Array(data);
 
   const ifcLoader = components.get(OBC.IfcLoader);
-  await ifcLoader.setup();
+  await ifcLoader.setup({ autoSetWasm: false });
+  ifcLoader.settings.wasm.path = "/app/";
+  ifcLoader.settings.wasm.absolute = false;
+
   const model = await ifcLoader.load(buffer);
 
   if (world) {
     world.scene.three.add(model);
-    world.camera.controls.fitToSphere(model, true);
+    currentModel = model;
   }
 }
 
@@ -174,12 +279,7 @@ async function loadMetadata(slug: string, filePath: string) {
   }
 }
 
-function highlightElement(expressID: number) {
-  // Highlighting will be implemented with That Open Company's highlighter
-  console.log("Highlight element:", expressID);
-}
-
-defineExpose({ loadModel, highlightElement });
+defineExpose({ loadModel, highlightElement, fitCameraToModel, setView, toggleWireframe });
 </script>
 
 <style scoped>
@@ -219,5 +319,18 @@ defineExpose({ loadModel, highlightElement });
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+.viewer-error {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  right: 20px;
+  background: rgba(200, 50, 50, 0.9);
+  color: white;
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  z-index: 10;
 }
 </style>

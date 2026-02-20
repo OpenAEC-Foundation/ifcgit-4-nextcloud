@@ -45,7 +45,11 @@
     <!-- Center: 3D Viewer -->
     <div class="viewer-container">
       <IfcViewer ref="viewerRef" />
-      <ViewerToolbar />
+      <ViewerToolbar
+        @fitToView="viewerRef?.fitCameraToModel()"
+        @setView="(d: string) => viewerRef?.setView(d)"
+        @toggleWireframe="viewerRef?.toggleWireframe()"
+      />
     </div>
 
     <!-- Right Sidebar: Properties & Git History -->

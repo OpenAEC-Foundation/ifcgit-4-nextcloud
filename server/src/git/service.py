@@ -65,10 +65,10 @@ def _extract_tree(repo: pygit2.Repository, tree: pygit2.Tree, dest: str):
     for entry in tree:
         entry_path = os.path.join(dest, entry.name)
         obj = repo.get(entry.id)
-        if obj.type == pygit2.GIT_OBJ_BLOB:
+        if obj.type == pygit2.GIT_OBJECT_BLOB:
             with open(entry_path, "wb") as f:
                 f.write(obj.data)
-        elif obj.type == pygit2.GIT_OBJ_TREE:
+        elif obj.type == pygit2.GIT_OBJECT_TREE:
             os.makedirs(entry_path, exist_ok=True)
             _extract_tree(repo, obj, entry_path)
 
@@ -236,8 +236,8 @@ def list_files(repo_path: str, branch: str = "main", path: str = "") -> list[dic
         obj = repo.get(entry.id)
         files.append({
             "name": entry.name,
-            "type": "dir" if obj.type == pygit2.GIT_OBJ_TREE else "file",
-            "size": len(obj.data) if obj.type == pygit2.GIT_OBJ_BLOB else None,
+            "type": "dir" if obj.type == pygit2.GIT_OBJECT_TREE else "file",
+            "size": len(obj.data) if obj.type == pygit2.GIT_OBJECT_BLOB else None,
             "oid": str(entry.id),
         })
 

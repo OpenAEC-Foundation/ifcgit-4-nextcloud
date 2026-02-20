@@ -1,37 +1,30 @@
 <template>
   <div class="viewer-toolbar">
-    <button class="tool-btn" title="Fit to view" @click="fitToView">
+    <button class="tool-btn" title="Fit to view" @click="$emit('fitToView')">
       <span>Fit</span>
     </button>
-    <button class="tool-btn" title="Front view" @click="setView('front')">
+    <button class="tool-btn" title="Front view" @click="$emit('setView', 'front')">
       <span>Front</span>
     </button>
-    <button class="tool-btn" title="Top view" @click="setView('top')">
+    <button class="tool-btn" title="Top view" @click="$emit('setView', 'top')">
       <span>Top</span>
     </button>
-    <button class="tool-btn" title="Right view" @click="setView('right')">
+    <button class="tool-btn" title="Right view" @click="$emit('setView', 'right')">
       <span>Right</span>
     </button>
     <div class="toolbar-separator"></div>
-    <button class="tool-btn" title="Toggle wireframe" @click="toggleWireframe">
+    <button class="tool-btn" title="Toggle wireframe" @click="$emit('toggleWireframe')">
       <span>Wire</span>
     </button>
   </div>
 </template>
 
 <script setup lang="ts">
-function fitToView() {
-  // Will interact with viewer component
-  console.log("Fit to view");
-}
-
-function setView(direction: string) {
-  console.log("Set view:", direction);
-}
-
-function toggleWireframe() {
-  console.log("Toggle wireframe");
-}
+defineEmits<{
+  fitToView: [];
+  setView: [direction: string];
+  toggleWireframe: [];
+}>();
 </script>
 
 <style scoped>
